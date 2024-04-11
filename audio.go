@@ -30,7 +30,7 @@ type AudioStream struct {
 // ChannelCount returns the number of channels
 // (1 for mono, 2 for stereo, etc.).
 func (audio *AudioStream) ChannelCount() int {
-	return int(audio.codecParams.channels)
+	return int(audio.codecParams.ch_layout.nb_channels)
 }
 
 // SampleRate returns the sample rate of the
@@ -54,14 +54,12 @@ func (audio *AudioStream) Open() error {
 		return err
 	}
 
-	audio.swrCtx = C.swr_alloc_set_opts(nil,
-		C.AV_CH_FRONT_LEFT|C.AV_CH_FRONT_RIGHT,
-		C.AV_SAMPLE_FMT_DBL, audio.codecCtx.sample_rate,
-		channelLayout(audio), audio.
-			codecCtx.sample_fmt, audio.codecCtx.
-			sample_rate, 0, nil)
+	ret := C.swr_alloc_set_opts2(&audio.swrCtx,
+		&audio.codecParams.ch_layout, C.AV_SAMPLE_FMT_DBL, audio.codecCtx.sample_rate,
+		&audio.codecParams.ch_layout, C.AV_SAMPLE_FMT_DBL, audio.codecCtx.sample_rate,
+		0, nil)
 
-	if audio.swrCtx == nil {
+	if ret != 0 {
 		return fmt.Errorf(
 			"couldn't allocate an SWR context")
 	}
@@ -139,8 +137,7 @@ func (audio *AudioStream) ReadAudioFrame() (*AudioFrame, bool, error) {
 		audio.buffer), maxBufferSize)
 	frame := newAudioFrame(audio,
 		int64(audio.frame.pts),
-		int(audio.frame.coded_picture_number),
-		int(audio.frame.display_picture_number), data)
+		data)
 
 	return frame, true, nil
 }
